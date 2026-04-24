@@ -1,0 +1,35 @@
+{
+  "name": "edge-context-mode",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cloudflare-native MCP server for context optimization — sandbox every tool call, store only summaries in LLM context",
+  "license": "UNLICENSED",
+  "scripts": {
+    "dev": "wrangler dev --env dev",
+    "deploy": "wrangler deploy",
+    "local": "tsx src/local.ts",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "migrate:local": "wrangler d1 migrations apply edge-context-db --local",
+    "migrate:remote": "wrangler d1 migrations apply edge-context-db --remote",
+    "cf-typegen": "wrangler types",
+    "benchmark": "tsx scripts/benchmark.ts"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.7",
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "@types/better-sqlite3": "^7.6.13",
+    "better-sqlite3": "^12.9.0",
+    "hono": "^4.7.11"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.8.0",
+    "@cloudflare/workers-types": "^4.20260415.1",
+    "@types/node": "^22.15.3",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.3",
+    "vitest": "^3.1.2",
+    "wrangler": "^4.51.0"
+  }
+}

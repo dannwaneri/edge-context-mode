@@ -1,0 +1,73 @@
+{
+  // =============================================================================
+  // Edge Context Mode — Wrangler Configuration
+  // Secrets set via: wrangler secret put <NAME>
+  // Required secrets before deploy:
+  //   MCP_SECRET               Shared secret for X-MCP-Secret header
+  //   VECTORIZE_MCP_URL        URL of your deployed vectorize-mcp-worker
+  //   VECTORIZE_MCP_TOKEN      Bearer token for vectorize-mcp-worker auth
+  // =============================================================================
+  "name": "edge-context-mode",
+  "main": "src/server.ts",
+  "compatibility_date": "2025-01-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  "limits": {
+    "cpu_ms": 30000
+  },
+
+  "vars": {
+    "ENVIRONMENT": "production",
+    "DEFAULT_TTL_MS": "2592000000",
+    "MAX_EXEC_TIMEOUT_MS": "30000"
+  },
+
+  // D1 for structured data + FTS
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "edge-context-db",
+      "database_id": "9c7b7f9a-f9d1-42d1-bec5-3ea56a0e9b3a",
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  // Durable Object for sandboxed execution
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "EXECUTOR_DO",
+        "class_name": "ExecutorDO"
+      }
+    ]
+  },
+
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_classes": ["ExecutorDO"]
+    }
+  ],
+
+  // Purge expired entries every 6 hours
+  "triggers": {
+    "crons": ["0 */6 * * *"]
+  },
+
+  // Development environment
+  "env": {
+    "dev": {
+      "vars": {
+        "ENVIRONMENT": "development"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "edge-context-db",
+          "database_id": "9c7b7f9a-f9d1-42d1-bec5-3ea56a0e9b3a",
+          "migrations_dir": "migrations"
+        }
+      ]
+    }
+  }
+}

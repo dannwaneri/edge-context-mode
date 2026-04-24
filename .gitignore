@@ -1,0 +1,14 @@
+# Secrets — never commit
+.dev.vars
+
+# Dependencies
+node_modules/
+
+# Wrangler build output + local D1
+.wrangler/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
