@@ -108,11 +108,21 @@ export async function indexToolOutput(
     type: opts.type,
   });
 
+  // Truncate raw_output at 512KB to stay within D1 row size limits
+  const MAX_RAW_BYTES = 512 * 1024;
+  let rawOutput = opts.raw_output ?? null;
+  if (rawOutput !== null) {
+    const encoded = new TextEncoder().encode(rawOutput);
+    if (encoded.length > MAX_RAW_BYTES) {
+      rawOutput = new TextDecoder().decode(encoded.slice(0, MAX_RAW_BYTES)) + "\n[truncated — output exceeded 512KB]";
+    }
+  }
+
   // Write context entry
   await env.DB.prepare(
     `INSERT INTO context_entries
-       (id, session_id, actor, type, intent, summary, raw_size, created_at, expires_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       (id, session_id, actor, type, intent, summary, raw_size, raw_output, created_at, expires_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
     .bind(
       id,
@@ -122,6 +132,7 @@ export async function indexToolOutput(
       opts.intent ?? null,
       opts.summary,
       opts.raw_size,
+      rawOutput,
       now,
       expires_at
     )
@@ -228,6 +239,22 @@ export async function searchRelevant(
     }))
     .sort((a, b) => b.score - a.score)
     .slice(0, limit);
+}
+
+/** Retrieve a single context entry by ID. Returns null if not found or expired. */
+export async function getEntryById(
+  env: StoreEnv,
+  id: string
+): Promise<{ id: string; summary: string; raw_output: string | null; type: EntryType; created_at: number } | null> {
+  const now = Date.now();
+  const result = await env.DB.prepare(
+    `SELECT id, summary, raw_output, type, created_at
+     FROM context_entries
+     WHERE id = ? AND expires_at > ?`
+  )
+    .bind(id, now)
+    .first<{ id: string; summary: string; raw_output: string | null; type: EntryType; created_at: number }>();
+  return result ?? null;
 }
 
 /** Return chronological session history, excluding expired entries. */

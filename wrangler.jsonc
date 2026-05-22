@@ -1,9 +1,13 @@
 {
   // =============================================================================
   // Edge Context Mode — Wrangler Configuration
-  // Secrets set via: wrangler secret put <NAME>
-  // Required secrets before deploy:
+  //
+  // Secrets (set via: wrangler secret put <NAME>)
+  // ─────────────────────────────────────────────
+  // REQUIRED:
   //   MCP_SECRET               Shared secret for X-MCP-Secret header
+  //
+  // OPTIONAL (semantic search upgrade — works without these, falls back to BM25):
   //   VECTORIZE_MCP_URL        URL of your deployed vectorize-mcp-worker
   //   VECTORIZE_MCP_TOKEN      Bearer token for vectorize-mcp-worker auth
   // =============================================================================

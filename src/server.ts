@@ -10,6 +10,7 @@ import { ctxReflect } from "./tools/reflect.js";
 import {
   searchRelevant,
   getSessionHistory,
+  getEntryById,
   purgeOld,
   getStats,
 } from "./tools/store.js";
@@ -37,20 +38,82 @@ function createMcpServer(env: Env): McpServer {
       actor: z.string().optional().describe("Who is running this (default: 'agent')"),
       timeout: z.number().optional().describe("Timeout in ms (max 30000)"),
     },
-    async (input) => {
-      const result = await ctxExecute(env, {
-        command: input.command,
-        intent: input.intent,
-        ...(input.session_id !== undefined && { session_id: input.session_id }),
-        ...(input.actor !== undefined && { actor: input.actor }),
-        ...(input.timeout !== undefined && { timeout: input.timeout }),
-      });
-      if ("error" in result) {
-        return { content: [{ type: "text", text: `Error: ${result.error}` }], isError: true };
-      }
+    async (_input) => {
+      // ctx_execute requires local-stdio mode — Cloudflare Workers cannot spawn
+      // subprocesses. Run the local stdio server instead:
+      //   npm run local
+      //   claude mcp add edge-context-mode -- node /path/to/edge-context-mode/src/local.ts
+      //
+      // All other tools (ctx_get, ctx_search, ctx_history, ctx_annotate,
+      // ctx_reflect, ctx_doctor) work normally in Workers HTTP mode.
       return {
-        content: [{ type: "text", text: `${result.ref}\n${result.summary}` }],
+        content: [{
+          type: "text",
+          text: [
+            "ctx_execute is not available in Workers HTTP mode.",
+            "Cloudflare Workers cannot spawn subprocesses.",
+            "",
+            "To use ctx_execute, run the local stdio server:",
+            "  npm run local",
+            "  claude mcp add edge-context-mode -- node /path/to/edge-context-mode/src/local.ts",
+            "",
+            "All other tools work normally in Workers HTTP mode.",
+          ].join("\n"),
+        }],
+        isError: true,
       };
+    }
+  );
+
+  // ── ctx_get ─────────────────────────────────────────────────────────────────
+  server.tool(
+    "ctx_get",
+    "Retrieve the summary and raw output stored behind a [ctx:id] reference. Use this when the summary alone isn't enough.",
+    {
+      id: z.string().describe("The [ctx:id] token or bare ID to look up"),
+    },
+    async ({ id }) => {
+      // Strip [ctx:] prefix if present
+      const bareId = id.replace(/^\[ctx:/, "").replace(/\]$/, "");
+      const entry = await getEntryById(env, bareId);
+      if (!entry) {
+        return { content: [{ type: "text", text: "Entry not found or expired." }] };
+      }
+      const lines = [
+        `ref:        [ctx:${entry.id}]`,
+        `type:       ${entry.type}`,
+        `created_at: ${new Date(entry.created_at).toISOString()}`,
+        `summary:    ${entry.summary}`,
+        entry.raw_output !== null
+          ? `\n--- raw output ---\n${entry.raw_output}`
+          : `\n(raw output not available for this entry)`,
+      ];
+      return { content: [{ type: "text", text: lines.join("\n") }] };
+    }
+  );
+
+  // ── ctx_annotate ─────────────────────────────────────────────────────────────
+  server.tool(
+    "ctx_annotate",
+    "Manually save a decision, note, or code snippet to session context. Returns a [ctx:id] reference like ctx_execute does.",
+    {
+      text: z.string().min(1).max(10_000).describe("The annotation text — a decision, note, or snippet"),
+      session_id: z.string().optional().describe("Session to attach this to (default: 'default')"),
+      actor: z.string().optional().describe("Who is annotating (default: 'user')"),
+    },
+    async ({ text, session_id = "default", actor = "user" }) => {
+      const { indexToolOutput } = await import("./tools/store.js");
+      const summary = `annotation: ${text.slice(0, 200)}${text.length > 200 ? "…" : ""}`;
+      const ref_id = await indexToolOutput(env, {
+        session_id,
+        actor,
+        type: "annotation",
+        intent: "manual annotation",
+        summary,
+        raw_size: new TextEncoder().encode(text).length,
+        raw_output: text,
+      });
+      return { content: [{ type: "text", text: `[ctx:${ref_id}]\n${summary}` }] };
     }
   );
 
@@ -140,8 +203,8 @@ function createMcpServer(env: Env): McpServer {
         d1 = "error";
       }
 
-      // Vectorize-mcp-worker ping
-      let vectorize_mcp: DoctorResult["vectorize_mcp"] = "unconfigured";
+      // Vectorize-mcp-worker ping (optional — degrades gracefully to BM25-only)
+      let vectorize_mcp: DoctorResult["vectorize_mcp"] = "disabled (optional)";
       if (env.VECTORIZE_MCP_URL) {
         try {
           const res = await fetch(`${env.VECTORIZE_MCP_URL}/health`, {
@@ -158,6 +221,7 @@ function createMcpServer(env: Env): McpServer {
       const result: DoctorResult = {
         d1,
         vectorize_mcp,
+        execution_mode: "workers-http",
         sessions,
         entries,
         uptime_ms: Date.now() - SERVER_START_MS,

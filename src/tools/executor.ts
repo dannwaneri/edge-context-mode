@@ -151,6 +151,7 @@ export async function ctxExecute(
     intent,
     summary,
     raw_size: new TextEncoder().encode(stdout).length,
+    raw_output: stdout, // stored in D1 for ctx_get retrieval; never auto-sent to LLM
   });
 
   return { ref: `[ctx:${ref_id}]`, summary };

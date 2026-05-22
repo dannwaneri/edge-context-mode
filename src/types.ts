@@ -14,19 +14,20 @@ export interface Env {
 
 // ─── Context entry (stored in D1) ────────────────────────────────────────────
 
-export type EntryType = "tool_output" | "prompt" | "decision" | "event";
+export type EntryType = "tool_output" | "prompt" | "decision" | "event" | "annotation";
 
 export interface ContextEntry {
-  id: string;          // [ctx:abc123] token (without brackets)
+  id: string;               // [ctx:abc123] token (without brackets)
   session_id: string;
-  actor: string;       // human attribution
+  actor: string;            // human attribution
   type: EntryType;
   intent: string | null;
-  summary: string;     // the only text that enters LLM context
-  raw_size: number;    // bytes of original output (never stored here)
+  summary: string;          // the only text that enters LLM context
+  raw_size: number;         // bytes of original output
+  raw_output: string | null; // full stdout or annotation text (stored in D1, never auto-sent to LLM)
   vector_id: string | null;
-  created_at: number;  // Unix ms
-  expires_at: number;  // Unix ms
+  created_at: number;       // Unix ms
+  expires_at: number;       // Unix ms
 }
 
 export interface SessionRecord {
@@ -81,7 +82,8 @@ export interface PurgeResult {
 
 export interface DoctorResult {
   d1: "ok" | "error";
-  vectorize_mcp: "ok" | "degraded" | "unconfigured";
+  vectorize_mcp: "ok" | "degraded" | "disabled (optional)";
+  execution_mode: "local-stdio" | "workers-http";
   sessions: number;
   entries: number;
   uptime_ms: number;
@@ -101,6 +103,7 @@ export interface IndexOptions {
   intent: string;
   summary: string;
   raw_size: number;
+  raw_output?: string; // optional: full stdout or annotation body; stored in D1, never returned to LLM automatically
   ttl_ms?: number;
 }
 

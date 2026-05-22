@@ -121,7 +121,7 @@ async function main() {
 
   const { ctxExecute } = await import("./tools/executor.js");
   const { ctxReflect } = await import("./tools/reflect.js");
-  const { searchRelevant, getSessionHistory, purgeOld, getStats } = await import("./tools/store.js");
+  const { searchRelevant, getSessionHistory, getEntryById, purgeOld, getStats, indexToolOutput } = await import("./tools/store.js");
 
   // Cast through unknown — local SQLite shim satisfies the runtime contract
   // even though it doesn't implement rarely-used D1 methods (dump, withSession).
@@ -145,6 +145,44 @@ async function main() {
     }, localExecFn);
     if ("error" in result) return { content: [{ type: "text", text: `Error: ${result.error}` }], isError: true };
     return { content: [{ type: "text", text: `${result.ref}\n${result.summary}` }] };
+  });
+
+  server.tool("ctx_get", "Retrieve the summary and raw output stored behind a [ctx:id] reference.", {
+    id: z.string().describe("The [ctx:id] token or bare ID to look up"),
+  }, async ({ id }) => {
+    const bareId = id.replace(/^\[ctx:/, "").replace(/\]$/, "");
+    const entry = await getEntryById(env as unknown as Env, bareId);
+    if (!entry) {
+      return { content: [{ type: "text", text: "Entry not found or expired." }] };
+    }
+    const lines = [
+      `ref:        [ctx:${entry.id}]`,
+      `type:       ${entry.type}`,
+      `created_at: ${new Date(entry.created_at).toISOString()}`,
+      `summary:    ${entry.summary}`,
+      entry.raw_output !== null
+        ? `\n--- raw output ---\n${entry.raw_output}`
+        : `\n(raw output not available for this entry)`,
+    ];
+    return { content: [{ type: "text", text: lines.join("\n") }] };
+  });
+
+  server.tool("ctx_annotate", "Manually save a decision, note, or code snippet to session context.", {
+    text: z.string().min(1).max(10_000).describe("The annotation text — a decision, note, or snippet"),
+    session_id: z.string().optional(),
+    actor: z.string().optional(),
+  }, async ({ text, session_id = "default", actor = "user" }) => {
+    const summary = `annotation: ${text.slice(0, 200)}${text.length > 200 ? "…" : ""}`;
+    const ref_id = await indexToolOutput(env as unknown as Env, {
+      session_id,
+      actor,
+      type: "annotation",
+      intent: "manual annotation",
+      summary,
+      raw_size: new TextEncoder().encode(text).length,
+      raw_output: text,
+    });
+    return { content: [{ type: "text", text: `[ctx:${ref_id}]\n${summary}` }] };
   });
 
   server.tool("ctx_search", "Hybrid BM25 + semantic search over session context.", {
@@ -192,7 +230,8 @@ async function main() {
         type: "text",
         text: JSON.stringify({
           d1: "ok",
-          vectorize_mcp: env.VECTORIZE_MCP_URL ? "configured" : "unconfigured",
+          vectorize_mcp: env.VECTORIZE_MCP_URL ? "configured" : "disabled (optional)",
+          execution_mode: "local-stdio",
           sessions,
           entries,
         }, null, 2),
