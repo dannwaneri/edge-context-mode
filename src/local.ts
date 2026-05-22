@@ -71,12 +71,24 @@ function openDb(): Database.Database {
 async function buildLocalEnv() {
   const db = openDb();
 
+  // Track applied migrations so re-runs never wipe data.
+  // Without this, migrations starting with DROP TABLE IF EXISTS would
+  // silently destroy all stored context on every server restart.
+  db.exec(`CREATE TABLE IF NOT EXISTS _migrations (name TEXT PRIMARY KEY, applied_at INTEGER)`);
+
   const migrationsDir = path.join(__dirname, "..", "migrations");
   const files = (await readdir(migrationsDir)).sort();
   for (const f of files) {
     if (!f.endsWith(".sql")) continue;
+    const already = db.prepare("SELECT 1 FROM _migrations WHERE name = ?").get(f);
+    if (already) continue;
     const sql = await readFile(path.join(migrationsDir, f), "utf8");
-    try { db.exec(sql); } catch { /* already applied */ }
+    try {
+      db.exec(sql);
+      db.prepare("INSERT INTO _migrations (name, applied_at) VALUES (?, ?)").run(f, Date.now());
+    } catch (err) {
+      console.error(`[migration] ${f} failed:`, err);
+    }
   }
 
   return {
