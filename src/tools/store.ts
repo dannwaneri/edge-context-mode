@@ -156,10 +156,18 @@ export async function indexToolOutput(
   return id;
 }
 
-// Wrap query in double quotes for FTS5 phrase search — prevents hyphens,
-// special chars, and column-name collisions from breaking the MATCH syntax.
+// Quote each term individually for FTS5 — prevents hyphens, special chars,
+// and column-name collisions from breaking MATCH syntax, while allowing
+// terms to match anywhere in the document (implicit AND, not phrase search).
+// e.g. "Vectorize optional" → "Vectorize" "optional" — matches even if
+// other words appear between them in the stored text.
 function ftsPhrase(q: string): string {
-  return `"${q.replace(/"/g, '""')}"`;
+  return q
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(word => `"${word.replace(/"/g, '""')}"`)
+    .join(" ");
 }
 
 /** Hybrid search: BM25 (D1 FTS) + semantic (vectorize-mcp-worker). */
