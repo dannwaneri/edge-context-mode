@@ -245,6 +245,57 @@ function checkSecret(request: Request, env: Env): boolean {
 
 const app = new Hono<{ Bindings: Env }>();
 
+app.get("/", (c) => {
+  return c.html(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>edge-context-mode</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #0f0f10; color: #e0e0e0; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 2rem; }
+    .card { max-width: 560px; width: 100%; }
+    h1 { font-size: 1.4rem; font-weight: 600; color: #fff; margin-bottom: .4rem; }
+    .tag { display: inline-block; font-size: .75rem; background: #1a1a2e; color: #60a5fa; border: 1px solid #2a2a4e; border-radius: 4px; padding: .15rem .5rem; margin-bottom: 1.2rem; }
+    p { color: #999; font-size: .9rem; line-height: 1.6; margin-bottom: 1.2rem; }
+    .tools { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; margin-bottom: 1.4rem; }
+    .tool { background: #18181b; border: 1px solid #27272a; border-radius: 6px; padding: .5rem .75rem; font-size: .8rem; }
+    .tool code { color: #60a5fa; font-family: "SF Mono", Consolas, monospace; }
+    .tool span { color: #666; display: block; margin-top: .15rem; }
+    .links { display: flex; gap: 1rem; flex-wrap: wrap; }
+    .links a { font-size: .85rem; color: #60a5fa; text-decoration: none; border-bottom: 1px solid rgba(96,165,250,.3); padding-bottom: 1px; }
+    .links a:hover { border-bottom-color: #60a5fa; }
+    .endpoint { background: #18181b; border: 1px solid #27272a; border-radius: 6px; padding: .6rem .9rem; font-size: .8rem; color: #666; margin-bottom: 1.4rem; }
+    .endpoint code { color: #a3e635; font-family: "SF Mono", Consolas, monospace; }
+    hr { border: none; border-top: 1px solid #27272a; margin: 1.2rem 0; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>edge-context-mode</h1>
+    <span class="tag">MCP Server · Cloudflare Workers</span>
+    <p>Keeps Claude Code sessions coherent over hours. Every tool call stores raw output in D1 — only a reference token and a 50-word summary enter the context window.</p>
+    <div class="tools">
+      <div class="tool"><code>ctx_execute</code><span>Run a command, store output</span></div>
+      <div class="tool"><code>ctx_get</code><span>Retrieve stored output by ref</span></div>
+      <div class="tool"><code>ctx_annotate</code><span>Save a decision or note</span></div>
+      <div class="tool"><code>ctx_search</code><span>Full-text search over session</span></div>
+      <div class="tool"><code>ctx_history</code><span>Chronological session log</span></div>
+      <div class="tool"><code>ctx_reflect</code><span>Session summary ≤100 words</span></div>
+    </div>
+    <div class="endpoint">MCP endpoint: <code>POST /mcp</code> · requires <code>X-MCP-Secret</code></div>
+    <hr />
+    <div class="links">
+      <a href="https://github.com/dannwaneri/edge-context-mode" target="_blank">GitHub</a>
+      <a href="https://github.com/dannwaneri/edge-context-mode/releases/tag/v1.0.0" target="_blank">v1.0.0 release</a>
+      <a href="/health">health check</a>
+    </div>
+  </div>
+</body>
+</html>`);
+});
+
 app.get("/health", (c) => {
   return c.json({ status: "ok", ts: Date.now() });
 });
